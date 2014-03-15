@@ -7,6 +7,38 @@ import (
 	"testing"
 )
 
+func Sender(send_set *Send_Set, prod_wg *sync.WaitGroup, num_chans int) {
+	for j := 0; j < num_chans; j++ {
+		send_set.Send(1)
+	}
+	prod_wg.Done()
+}
+
+func Receiver(recv_set *Recv_Set, results_wg *sync.WaitGroup, results chan interface{}) {
+	count := 0
+	//blocked here
+	for data, done := recv_set.Next(); !done; data, done = recv_set.Next() {
+		inc := data.(int)
+		count += inc
+	}
+
+	results <- count
+	results_wg.Done()
+}
+
+func Check_Result(t *testing.T, results chan interface{}, num_chans int) {
+	final_count := 0
+	for res := range results {
+		num := res.(int)
+		final_count += num
+	}
+
+	if final_count != (num_chans * num_chans) {
+		fmt.Println("expected: ", num_chans*num_chans, " ... got: ", final_count)
+		t.Fail()
+	}
+}
+
 func Recv_Set_Test(t *testing.T, buff_sz int) {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
@@ -47,17 +79,7 @@ func Recv_Set_Test(t *testing.T, buff_sz int) {
 	wg2.Add(num_cons)
 
 	for i := 0; i < num_cons; i++ {
-		go func() {
-			count := 0
-
-			for data, done := recv_set.Next(); !done; data, done = recv_set.Next() {
-				inc := data.(int)
-				count += inc
-			}
-
-			results <- count
-			wg2.Done()
-		}()
+		go Receiver(recv_set, &wg2, results)
 	}
 
 	go func() {
@@ -65,16 +87,7 @@ func Recv_Set_Test(t *testing.T, buff_sz int) {
 		close(results)
 	}()
 
-	final_count := 0
-	for res := range results {
-		num := res.(int)
-		final_count += num
-	}
-
-	if final_count != (num_chans * num_chans) {
-		fmt.Println("expected: ", num_chans*num_chans, " ... got: ", final_count)
-		t.Fail()
-	}
+	Check_Result(t, results, num_chans)
 }
 
 func Send_Set_Test(t *testing.T, buff_sz int) {
@@ -115,12 +128,7 @@ func Send_Set_Test(t *testing.T, buff_sz int) {
 	send_set := New_Send_Set(chans)
 
 	for i := 0; i < num_chans; i++ {
-		go func() {
-			for j := 0; j < num_chans; j++ {
-				send_set.Send(1)
-			}
-			prod_wg.Done()
-		}()
+		go Sender(send_set, &prod_wg, num_chans)
 	}
 
 	go func() {
@@ -128,17 +136,48 @@ func Send_Set_Test(t *testing.T, buff_sz int) {
 		send_set.Close_All()
 	}()
 
-	final_count := 0
-	for res := range results {
-		num := res.(int)
-		final_count += num
+	Check_Result(t, results, num_chans)
+
+}
+
+func Send_Set_To_Recv_Set_Test(t *testing.T, buff_sz int) {
+	num_chans := 10
+	chans := make([]chan interface{}, num_chans)
+	results := make(chan interface{})
+
+	var prod_wg sync.WaitGroup
+	var results_wg sync.WaitGroup
+
+	prod_wg.Add(num_chans)
+	results_wg.Add(num_chans)
+
+	for i := 0; i < num_chans; i++ {
+		if buff_sz > 1 {
+			chans[i] = make(chan interface{}, buff_sz)
+		} else {
+			chans[i] = make(chan interface{})
+		}
 	}
 
-	if final_count != (num_chans * num_chans) {
-		fmt.Println("expected: ", num_chans*num_chans, " ... got: ", final_count)
-		t.Fail()
+	send_set := New_Send_Set(chans)
+	recv_set := New_Recv_Set(chans)
+
+	for i := 0; i < num_chans; i++ {
+		go Sender(send_set, &prod_wg, num_chans)
+		go Receiver(recv_set, &results_wg, results)
 	}
 
+	go func() {
+		prod_wg.Wait()
+		send_set.Close_All()
+	}()
+
+	go func() {
+		results_wg.Wait()
+		close(results)
+	}()
+
+	Check_Result(t, results, num_chans)
 }
 
 func Test_Recv_Set_Unbuffered(t *testing.T) {
@@ -155,6 +194,14 @@ func Test_Send_Set_Unbuffered(t *testing.T) {
 
 func Test_Send_Set_Buffered(t *testing.T) {
 	Send_Set_Test(t, 5)
+}
+
+func Test_Send_Set_To_Recv_Set_Unbuffered(t *testing.T) {
+	Send_Set_To_Recv_Set_Test(t, -1)
+}
+
+func Test_Send_Set_To_Recv_Set_Buffered(t *testing.T) {
+	Send_Set_To_Recv_Set_Test(t, 5)
 }
 
 // func Test_End_To_End(t *testing.T) {
