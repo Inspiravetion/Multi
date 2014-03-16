@@ -1,11 +1,14 @@
-package multi
+package send_recv_set_test
 
 import (
 	"fmt"
+	. "multi"
 	"runtime"
 	"sync"
 	"testing"
 )
+
+//Test Suite
 
 func Sender(send_set *Send_Set, prod_wg *sync.WaitGroup, num_chans int) {
 	for j := 0; j < num_chans; j++ {
@@ -16,7 +19,6 @@ func Sender(send_set *Send_Set, prod_wg *sync.WaitGroup, num_chans int) {
 
 func Receiver(recv_set *Recv_Set, results_wg *sync.WaitGroup, results chan interface{}) {
 	count := 0
-	//blocked here
 	for data, done := recv_set.Next(); !done; data, done = recv_set.Next() {
 		inc := data.(int)
 		count += inc
@@ -39,12 +41,11 @@ func Check_Result(t *testing.T, results chan interface{}, num_chans int) {
 	}
 }
 
-func Recv_Set_Test(t *testing.T, buff_sz int) {
+func Recv_Set_Test(t *testing.T, num_chans, buff_sz int) {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
 	//Start mock producers
 	var wg sync.WaitGroup
-	num_chans := 10
 	chans := make([]chan interface{}, num_chans)
 	wg.Add(num_chans)
 
@@ -90,12 +91,11 @@ func Recv_Set_Test(t *testing.T, buff_sz int) {
 	Check_Result(t, results, num_chans)
 }
 
-func Send_Set_Test(t *testing.T, buff_sz int) {
+func Send_Set_Test(t *testing.T, num_chans, buff_sz int) {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
 	//Start mock recievers
 	var results_wg sync.WaitGroup
-	num_chans := 10
 	chans := make([]chan interface{}, num_chans)
 	results := make(chan interface{})
 	results_wg.Add(num_chans)
@@ -140,8 +140,7 @@ func Send_Set_Test(t *testing.T, buff_sz int) {
 
 }
 
-func Send_Set_To_Recv_Set_Test(t *testing.T, buff_sz int) {
-	num_chans := 10
+func Send_Set_To_Recv_Set_Test(t *testing.T, num_chans, buff_sz int) {
 	chans := make([]chan interface{}, num_chans)
 	results := make(chan interface{})
 
@@ -180,60 +179,76 @@ func Send_Set_To_Recv_Set_Test(t *testing.T, buff_sz int) {
 	Check_Result(t, results, num_chans)
 }
 
-func Test_Recv_Set_Unbuffered(t *testing.T) {
-	Recv_Set_Test(t, -1)
+//Run Test Suite
+
+func Test_Recv_Set_Unbuffered_Small(t *testing.T) {
+	Recv_Set_Test(t, 10, -1)
 }
 
-func Test_Recv_Set_Buffered(t *testing.T) {
-	Recv_Set_Test(t, 5)
+func Test_Recv_Set_Buffered_Small(t *testing.T) {
+	Recv_Set_Test(t, 10, 5)
 }
 
-func Test_Send_Set_Unbuffered(t *testing.T) {
-	Send_Set_Test(t, -1)
+func Test_Send_Set_Unbuffered_Small(t *testing.T) {
+	Send_Set_Test(t, 10, -1)
 }
 
-func Test_Send_Set_Buffered(t *testing.T) {
-	Send_Set_Test(t, 5)
+func Test_Send_Set_Buffered_Small(t *testing.T) {
+	Send_Set_Test(t, 10, 5)
 }
 
-func Test_Send_Set_To_Recv_Set_Unbuffered(t *testing.T) {
-	Send_Set_To_Recv_Set_Test(t, -1)
+func Test_Send_Set_To_Recv_Set_Unbuffered_Small(t *testing.T) {
+	Send_Set_To_Recv_Set_Test(t, 10, -1)
 }
 
-func Test_Send_Set_To_Recv_Set_Buffered(t *testing.T) {
-	Send_Set_To_Recv_Set_Test(t, 5)
+func Test_Send_Set_To_Recv_Set_Buffered_Small(t *testing.T) {
+	Send_Set_To_Recv_Set_Test(t, 10, 5)
 }
 
-// func Test_End_To_End(t *testing.T) {
+func Test_Recv_Set_Unbuffered_Large(t *testing.T) {
+	Recv_Set_Test(t, 100, -1)
+}
 
-// 	runtime.GOMAXPROCS(runtime.NumCPU())
+func Test_Recv_Set_Buffered_Large(t *testing.T) {
+	Recv_Set_Test(t, 100, 50)
+}
 
-// 	num_messages := 100000
+func Test_Send_Set_Unbuffered_Large(t *testing.T) {
+	Send_Set_Test(t, 100, -1)
+}
 
-// 	var count int
-// 	var lock sync.Mutex
+func Test_Send_Set_Buffered_Large(t *testing.T) {
+	Send_Set_Test(t, 100, 50)
+}
 
-// 	//Easy ways
-// 	New_Stream(10, 10, 10).Produce(5, 2, func(i int, chans *Send_Set) {
-// 		for j := 0; j < num_messages; j++ {
-// 			chans.Send("hello")
-// 		}
-// 	}).Process(5, 2, func(data interface{}, chans *Send_Set) {
-// 		chans.Send(fmt.Sprintf("%s world", data))
-// 	}).Consume_And_Wait(func(data interface{}) {
-// 		msg := data.(string)
+func Test_Send_Set_To_Recv_Set_Unbuffered_Large(t *testing.T) {
+	Send_Set_To_Recv_Set_Test(t, 100, -1)
+}
 
-// 		if msg != "hello world" {
-// 			fmt.Println("msg isnt right => ", msg)
-// 			t.Fail()
-// 		}
-// 		lock.Lock()
-// 		count++
-// 		lock.Unlock()
-// 	})
+func Test_Send_Set_To_Recv_Set_Buffered_Large(t *testing.T) {
+	Send_Set_To_Recv_Set_Test(t, 100, 50)
+}
 
-// 	if count != num_messages {
-// 		fmt.Println("lost some packets => ", count/num_messages, "%")
-// 		t.Fail()
-// 	}
+// func Test_Recv_Set_Unbuffered_Huge(t *testing.T) {
+// 	Recv_Set_Test(t, 500, -1)
+// }
+
+// func Test_Recv_Set_Buffered_Huge(t *testing.T) {
+// 	Recv_Set_Test(t, 500, 100)
+// }
+
+// func Test_Send_Set_Unbuffered_Huge(t *testing.T) {
+// 	Send_Set_Test(t, 500, -1)
+// }
+
+// func Test_Send_Set_Buffered_Huge(t *testing.T) {
+// 	Send_Set_Test(t, 500, 100)
+// }
+
+// func Test_Send_Set_To_Recv_Set_Unbuffered_Huge(t *testing.T) {
+// 	Send_Set_To_Recv_Set_Test(t, 500, -1)
+// }
+
+// func Test_Send_Set_To_Recv_Set_Buffered_Huge(t *testing.T) {
+// 	Send_Set_To_Recv_Set_Test(t, 500, 100)
 // }
