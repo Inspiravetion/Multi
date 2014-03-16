@@ -3,7 +3,7 @@ Multi
 
 Concurrency helpers for dealing with arbitrary numbers of channels and goroutines. 
 
-```
+```go
   //Start a new Multi Stream with 30 goroutines; 10 producers, 10 processors, and 10 consumers
   //Have the producer goroutines multiplex their sends across 5 channels with a buffer size of two
   New_Stream(10, 10, 10).Produce(5, 2, func(prod_idx int, chans *Send_Set) {
